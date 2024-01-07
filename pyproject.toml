@@ -16,6 +16,7 @@ py-vollib = "^1.0.1"
 matplotlib = "^3.8.2"
 click = "^8.1.7"
 cvxpy = "^1.4.1"
+seaborn = "^0.13.1"
 
 
 [build-system]

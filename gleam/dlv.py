@@ -182,9 +182,12 @@ def compute_forward_op(k: np.ndarray, gamma: np.ndarray, backward_theta: np.ndar
     gamma_center = 1 / (dk_plus * dk_minus)
     gamma_minus = 2 / ((dk_plus + dk_minus) * dk_minus)
 
-    w_minus = (backward_theta[1:-1] / gamma) * gamma_minus
-    w_center = (backward_theta[1:-1] / gamma) * gamma_center
-    w_plus = (backward_theta[1:-1] / gamma) * gamma_plus
+    # Adjust gamma so division can take place
+    gamma_ = gamma.clip(min=1e-12)
+
+    w_minus = (backward_theta[1:-1] / gamma_) * gamma_minus
+    w_center = (backward_theta[1:-1] / gamma_) * gamma_center
+    w_plus = (backward_theta[1:-1] / gamma_) * gamma_plus
 
     a = np.diag(1 + 2 * w_center)
     b = np.diag(-w_minus[1:], 1)
