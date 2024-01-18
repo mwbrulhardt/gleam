@@ -47,6 +47,68 @@ def augment_data(prices, strikes, maturities, weights, bounds):
     return C, k, t, w
 
 
+def correct_numerical_errors(C, C_model, k, t):
+    m = t.shape[0]
+    dt_plus = t[1:] - t[:-1]
+
+    gamma = m * [None]
+    backward_theta = m * [None]
+    p = m * [None]
+    C_mod = m * [None]
+    lv = m * [None]
+
+    C_mod[0] = (1 - k[0]).clip(min=0)
+
+    p[0] = np.array([0, 1, 0])
+    dk_plus = k[0][2:] - k[0][1:-1]
+    dk_minus =  k[0][1:-1] - k[0][:-2]
+    gamma[0] = 2*p[0] / (dk_plus + dk_minus)
+
+    for j in range(1, m):
+        C_mod[j] = C_model[j].value
+        C_mod[j][:2] = (1 - k[j][:2]).clip(min=0)
+        C_mod[j][-2:] = (1 - k[j][-2:]).clip(min=0)
+
+        # i = -1 : n_j
+        dk_plus = k[j][2:] - k[j][1:-1]
+        dk_minus = k[j][1:-1] - k[j][:-2]
+        delta0 = delta(C_mod[j][:-1], dk_minus)
+        delta1 = delta(C_mod[j][1:], dk_plus)
+
+        # i = -1 : n_j
+        p[j] = delta1 - delta0
+        gamma[j] = 2*(delta1 - delta0) / (dk_plus + dk_minus)
+
+        # i = -2 : n_j + 1
+        omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(min=0)
+        backward_theta[j] = C_mod[j] - omega@p[j - 1]
+
+        # i = -1 : n_j
+        theta = backward_theta[j][2:-2] / dt_plus[j - 1]
+        gamma_ = gamma[j][1:-1]
+        k_ = k[j][2:-2]
+
+        lv[j] = np.where(
+            (gamma_ < 0) | (theta < 0) | ((gamma_ == 0) & (theta > 0)),
+            np.inf,
+            2*(theta / (gamma_*k_**2))
+        )**0.5
+
+
+    outputs = {
+        "t": t,
+        "k": k,
+        "C": C,
+        "C_model": [C_mod[j] for j in range(m)],
+        "p": [p[j] for j in range(m)],
+        "backward_theta": [None] + [backward_theta[j] for j in range(1, m)],
+        "gamma": [gamma[j] for j in range(m)],
+        "lv": [None] + [lv[j] for j in range(1, m)]
+    }
+
+    return outputs
+
+
 def calibrate_dlvs(
         prices: List[List[float]],
         strikes: List[List[float]],
@@ -68,7 +130,6 @@ def calibrate_dlvs(
 
     m = t.shape[0]
 
-    dt = t[1:] - t[:-1]
 
     # Variables
     C_model = [cp.Variable(len(C[j]), nonneg=True) for j in range(m)]
@@ -105,8 +166,9 @@ def calibrate_dlvs(
         backward_theta[j] = C_model[j] - omega@p[j - 1]
 
         # i = -1 : n_j
-        lb = cp.multiply(gamma[j], 0.5 * dt[j - 1] * k[j][1:-1]**2*lv_min**2)
-        ub = cp.multiply(gamma[j], 0.5 * dt[j - 1] * k[j][1:-1]**2*lv_max**2)
+        dt = t[j] - t[j - 1]
+        lb = 0.5*cp.multiply(gamma[j], k[j][1:-1]**2)*dt*lv_min**2
+        ub = 0.5*cp.multiply(gamma[j], k[j][1:-1]**2)*dt*lv_max**2
 
         constraints += [
             # i = 0 : n_j - 1
@@ -135,24 +197,7 @@ def calibrate_dlvs(
     if not np.isfinite(problem.value):
         raise ValueError(f"Optimization infeasible. Value: {problem.value}")
 
-    outputs = {
-        "t": t,
-        "k": k,
-        "C": C,
-        "C_model": [C_model[j].value for j in range(m)],
-        "p": [p[j].value if isinstance(p[j], cp.Expression) else p[j] for j in range(m)],
-        "backward_theta": [None] + [backward_theta[j].value for j in range(1, m)],
-        "gamma": [gamma[j].value if isinstance(gamma[j], cp.Expression) else gamma[j] for j in range(m)],
-        "lv": [None]
-    }
-
-    for j in range(1, m):
-        gamma = outputs["gamma"][j]
-        bt = outputs["backward_theta"][j]
-        k = outputs["k"][j]
-        outputs["lv"] += [2*bt[2:-2] / (gamma[1:-1]*k[2:-2]**2*dt[j - 1])]
-
-    return outputs
+    return correct_numerical_errors(C, C_model, k, t)
 
 
 def compute_psi(k: np.ndarray):
