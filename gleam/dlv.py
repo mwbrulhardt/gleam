@@ -84,16 +84,13 @@ def correct_numerical_errors(C, C_model, k, t):
         backward_theta[j] = C_mod[j] - omega@p[j - 1]
 
         # i = -1 : n_j
-        theta = backward_theta[j][2:-2] / dt_plus[j - 1]
-        gamma_ = gamma[j][1:-1]
-        k_ = k[j][2:-2]
+        dt = t[j] - t[j - 1]
 
         lv[j] = np.where(
-            (gamma_ < 0) | (theta < 0) | ((gamma_ == 0) & (theta > 0)),
-            np.inf,
-            2*(theta / (gamma_*k_**2))
+            (gamma[j][1:-1] > 0) & (backward_theta[j][2:-2] >= 0),
+            2*(backward_theta[j][2:-2] / (gamma[j][1:-1]*k[j][2:-2]**2*dt)),
+            0
         )**0.5
-
 
     outputs = {
         "t": t,
@@ -428,7 +425,7 @@ class DiscreteLocalVolatilityModel:
         gamma = (2*p / (dk_plus + dk_minus)).clip(min=0)
 
         lv = np.where(
-            gamma[1:-1] > 0,
+            (gamma[1:-1] > 0) & (bt[2:-2] >= 0),
             2*(bt[2:-2] / (gamma[1:-1]*k_aug[2:-2]**2*dt)),
             0
         )**0.5
