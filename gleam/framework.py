@@ -3,6 +3,8 @@ from scipy.stats import norm
 
 
 class Framework:
+    """A class for encapsulating both the numpy and torch framework."""
+
     _instances = {}
 
     def __init__(self, backend: str = "numpy"):
