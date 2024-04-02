@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import Tuple, List
+from typing import List, Tuple
 
 import cvxpy as cp
 import numpy as np
 
-import gleam.black_scholes as bs
+import gleam.pricing.black_scholes as bs
 
 
 def delta(C, dk_plus):
@@ -19,7 +19,7 @@ def augment_data(prices, strikes, maturities, weights, bounds):
     t = np.array([0] + maturities)
     m = t.shape[0]
 
-    k = [1 + 0.1*np.arange(-2, 3)]
+    k = [1 + 0.1 * np.arange(-2, 3)]
     C = [(1 - k[0]).clip(min=0)]
     w = [None]
 
@@ -40,16 +40,17 @@ def augment_data(prices, strikes, maturities, weights, bounds):
         assert max(k[-1]) > 1, "Missing strike on right side."
         assert min(k[-1]) <= min(k[-2]), "Grid not expanding. Lower bound violation."
         assert max(k[-1]) >= max(k[-2]), "Grid not expanding. Upper bound violation."
-        assert len(np.unique(strikes[j - 1])) == len(strikes[j - 1]), f"Repeated strikes on maturity {t[j]}"
+        assert len(np.unique(strikes[j - 1])) == len(
+            strikes[j - 1]
+        ), f"Repeated strikes on maturity {t[j]}"
 
         w += [np.array(weights[j - 1])]
-    
+
     return C, k, t, w
 
 
 def correct_numerical_errors(C, C_model, k, t):
     m = t.shape[0]
-    dt_plus = t[1:] - t[:-1]
 
     gamma = m * [None]
     backward_theta = m * [None]
@@ -61,8 +62,8 @@ def correct_numerical_errors(C, C_model, k, t):
 
     p[0] = np.array([0, 1, 0])
     dk_plus = k[0][2:] - k[0][1:-1]
-    dk_minus =  k[0][1:-1] - k[0][:-2]
-    gamma[0] = 2*p[0] / (dk_plus + dk_minus)
+    dk_minus = k[0][1:-1] - k[0][:-2]
+    gamma[0] = 2 * p[0] / (dk_plus + dk_minus)
 
     for j in range(1, m):
         C_mod[j] = C_model[j].value
@@ -77,20 +78,23 @@ def correct_numerical_errors(C, C_model, k, t):
 
         # i = -1 : n_j
         p[j] = delta1 - delta0
-        gamma[j] = 2*(delta1 - delta0) / (dk_plus + dk_minus)
+        gamma[j] = 2 * (delta1 - delta0) / (dk_plus + dk_minus)
 
         # i = -2 : n_j + 1
         omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(min=0)
-        backward_theta[j] = C_mod[j] - omega@p[j - 1]
+        backward_theta[j] = C_mod[j] - omega @ p[j - 1]
 
         # i = -1 : n_j
         dt = t[j] - t[j - 1]
 
-        lv[j] = np.where(
-            (gamma[j][1:-1] > 0) & (backward_theta[j][2:-2] >= 0),
-            2*(backward_theta[j][2:-2] / (gamma[j][1:-1]*k[j][2:-2]**2*dt)),
-            0
-        )**0.5
+        lv[j] = (
+            np.where(
+                (gamma[j][1:-1] > 0) & (backward_theta[j][2:-2] >= 0),
+                2 * (backward_theta[j][2:-2] / (gamma[j][1:-1] * k[j][2:-2] ** 2 * dt)),
+                0,
+            )
+            ** 0.5
+        )
 
     outputs = {
         "t": t,
@@ -100,23 +104,23 @@ def correct_numerical_errors(C, C_model, k, t):
         "p": [p[j] for j in range(m)],
         "backward_theta": [None] + [backward_theta[j] for j in range(1, m)],
         "gamma": [gamma[j] for j in range(m)],
-        "lv": [None] + [lv[j] for j in range(1, m)]
+        "lv": [None] + [lv[j] for j in range(1, m)],
     }
 
     return outputs
 
 
 def calibrate_dlvs(
-        prices: List[List[float]],
-        strikes: List[List[float]],
-        maturities: List[float],
-        weights: List[List[float]],
-        bounds: np.ndarray,
-        local_vol_min: float = 0.01,
-        local_vol_max: float = 4,
-        implied_vol_min: float = 0.05,
-        implied_vol_max: float = 3
-    ):
+    prices: List[List[float]],
+    strikes: List[List[float]],
+    maturities: List[float],
+    weights: List[List[float]],
+    bounds: np.ndarray,
+    local_vol_min: float = 0.01,
+    local_vol_max: float = 4,
+    implied_vol_min: float = 0.05,
+    implied_vol_max: float = 3,
+):
     assert 0 <= local_vol_min <= local_vol_max, "Local volatility boundaries violated."
 
     lv_min, lv_max = local_vol_min, local_vol_max
@@ -126,7 +130,6 @@ def calibrate_dlvs(
     C, k, t, w = augment_data(prices, strikes, maturities, weights, bounds)
 
     m = t.shape[0]
-
 
     # Variables
     C_model = [cp.Variable(len(C[j]), nonneg=True) for j in range(m)]
@@ -141,13 +144,12 @@ def calibrate_dlvs(
 
     p[0] = np.array([0, 1, 0])
     dk_plus = k[0][2:] - k[0][1:-1]
-    dk_minus =  k[0][1:-1] - k[0][:-2]
-    gamma[0] = 2*p[0] / (dk_plus + dk_minus)
+    dk_minus = k[0][1:-1] - k[0][:-2]
+    gamma[0] = 2 * p[0] / (dk_plus + dk_minus)
 
     loss = 0
 
     for j in range(1, m):
-
         # i = -1 : n_j
         dk_plus = k[j][2:] - k[j][1:-1]
         dk_minus = k[j][1:-1] - k[j][:-2]
@@ -156,16 +158,16 @@ def calibrate_dlvs(
 
         # i = -1 : n_j
         p[j] = delta1 - delta0
-        gamma[j] = 2*(delta1 - delta0) / (dk_plus + dk_minus)
+        gamma[j] = 2 * (delta1 - delta0) / (dk_plus + dk_minus)
 
         # i = -2 : n_j + 1
         omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(min=0)
-        backward_theta[j] = C_model[j] - omega@p[j - 1]
+        backward_theta[j] = C_model[j] - omega @ p[j - 1]
 
         # i = -1 : n_j
         dt = t[j] - t[j - 1]
-        lb = 0.5*cp.multiply(gamma[j], k[j][1:-1]**2)*dt*lv_min**2
-        ub = 0.5*cp.multiply(gamma[j], k[j][1:-1]**2)*dt*lv_max**2
+        lb = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_min**2
+        ub = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_max**2
 
         constraints += [
             # i = 0 : n_j - 1
@@ -180,14 +182,14 @@ def calibrate_dlvs(
             C_model[j][:2] == C[j][:2],
             C_model[j][-2:] == C[j][-2:],
             C_model[j] >= bs.price(1, k[j], t[j], iv_min),
-            C_model[j] <= bs.price(1, k[j], t[j], iv_max)
+            C_model[j] <= bs.price(1, k[j], t[j], iv_max),
         ]
 
         # i = 0 : n_j - 1
-        loss += w[j].T@cp.abs(C[j][2:-2] - C_model[j][2:-2])
+        loss += w[j].T @ cp.abs(C[j][2:-2] - C_model[j][2:-2])
 
     objective = cp.Minimize(loss)
-    
+
     problem = cp.Problem(objective, constraints)
     problem.solve()
 
@@ -203,13 +205,15 @@ def compute_psi(k: np.ndarray):
     dk_plus = k[1:] - k[:-1]
 
     a = np.zeros([n + 2, n + 4])
-    a[:, :n + 2] = np.diag(1 / dk_plus[:-1])
+    a[:, : n + 2] = np.diag(1 / dk_plus[:-1])
 
     b = np.zeros([n + 2, n + 4])
-    b[:, 1:n + 3] = np.diag(-(dk_plus[:-1] + dk_plus[1:]) / (dk_plus[:-1]*dk_plus[1:]))
+    b[:, 1 : n + 3] = np.diag(
+        -(dk_plus[:-1] + dk_plus[1:]) / (dk_plus[:-1] * dk_plus[1:])
+    )
 
     c = np.zeros([n + 2, n + 4])
-    c[:, 2:n + 4] = np.diag(1 / dk_plus[1:])
+    c[:, 2 : n + 4] = np.diag(1 / dk_plus[1:])
 
     psi = a + b + c
 
@@ -219,16 +223,16 @@ def compute_psi(k: np.ndarray):
 def compute_forward_op(k: np.ndarray, gamma: np.ndarray, backward_theta: np.ndarray):
     dk_plus = k[2:] - k[1:-1]
     dk_minus = k[1:-1] - k[:-2]
-    bt = backward_theta[1:-1] 
+    bt = backward_theta[1:-1]
 
     gamma_plus = 2 / ((dk_plus + dk_minus) * dk_plus)
     gamma_center = 1 / (dk_plus * dk_minus)
     gamma_minus = 2 / ((dk_plus + dk_minus) * dk_minus)
 
     u = np.where((gamma > 0) & (bt > 0), bt / gamma, 0)
-    w_minus = u*gamma_minus
-    w_center = u*gamma_center
-    w_plus = u*gamma_plus
+    w_minus = u * gamma_minus
+    w_center = u * gamma_center
+    w_plus = u * gamma_plus
 
     a = np.diag(1 + 2 * w_center)
     b = np.diag(-w_minus[1:], 1)
@@ -250,8 +254,7 @@ def reformat(C: np.ndarray, k: np.ndarray, tau: np.ndarray, w: np.ndarray = None
     weights = []
 
     for j in range(len(maturities)):
-
-        c = (tau == maturities[j])
+        c = tau == maturities[j]
 
         idx = np.argsort(k[c])
 
@@ -271,7 +274,7 @@ class Slice:
     density: np.ndarray
     omega: np.ndarray
     psi: np.ndarray
-    forward_op_decomp: Tuple[np.ndarray,np.ndarray, np.ndarray]
+    forward_op_decomp: Tuple[np.ndarray, np.ndarray, np.ndarray]
 
     def transition_op(self, tau: float) -> np.ndarray:
         lower, upper = self.maturity_bounds
@@ -281,59 +284,49 @@ class Slice:
         lower, upper = self.maturity_bounds
 
         beta = (tau - lower) / (upper - lower)
-        I = U@D**beta@U_inv
+        f_op = U @ D**beta @ U_inv
 
-        xi = self.psi@self.omega
+        xi = self.psi @ self.omega
 
-        return I@xi
+        return f_op @ xi
 
     def interpolate(self, k: np.ndarray, tau: float) -> np.ndarray:
         lower, upper = self.maturity_bounds
         assert lower < tau <= upper, "Maturity outside of range."
         assert np.all(k[:-1] < k[1:]), "Strikes are not increasing."
 
-        p_hat = self.transition_op(tau)@self.density
+        p_hat = self.transition_op(tau) @ self.density
 
         omega = (self.k_next[1:-1].reshape(1, -1) - k.reshape(-1, 1)).clip(min=0)
-        C_hat = omega@p_hat
+        C_hat = omega @ p_hat
 
         return C_hat
 
 
 class DiscreteLocalVolatilityModel:
-
     def __init__(self):
         self.maturities = None
         self.parameters = None
         self.slices = []
 
     def calibrate(
-            self,
-            prices: np.ndarray,
-            strikes: np.ndarray,
-            maturities: np.ndarray,
-            bounds: np.ndarray,
-            weights: np.ndarray = None,
-            local_vol_min: float = 0.01,
-            local_vol_max: float = 4
-        ):
+        self,
+        prices: np.ndarray,
+        strikes: np.ndarray,
+        maturities: np.ndarray,
+        bounds: np.ndarray,
+        weights: np.ndarray = None,
+        local_vol_min: float = 0.01,
+        local_vol_max: float = 4,
+    ):
         # Reformat data
         prices, strikes, maturities, weights = reformat(
-            prices, 
-            strikes, 
-            maturities, 
-            weights
+            prices, strikes, maturities, weights
         )
 
         # Calibrate
         variables = calibrate_dlvs(
-            prices,
-            strikes,
-            maturities,
-            weights,
-            bounds,
-            local_vol_min,
-            local_vol_max
+            prices, strikes, maturities, weights, bounds, local_vol_min, local_vol_max
         )
         self.parameters = variables
 
@@ -350,19 +343,21 @@ class DiscreteLocalVolatilityModel:
             backward_theta1 = variables["backward_theta"][j + 1]
 
             # Compute the I (forward operator)
-            I = compute_forward_op(k1, gamma1, backward_theta1)
-            lam, U = np.linalg.eig(I)
+            f_op = compute_forward_op(k1, gamma1, backward_theta1)
+            lam, U = np.linalg.eig(f_op)
 
-            self.slices += [Slice(
-                num_strikes=k0.shape[0] - 4,
-                k=k0,
-                k_next=k1,
-                maturity_bounds=(self.maturities[j], self.maturities[j + 1]),
-                density=variables["p"][j],
-                omega=(k0[1:-1].reshape(1, -1) - k1.reshape(-1, 1)).clip(min=0),
-                psi=compute_psi(k1),
-                forward_op_decomp=(U, np.diag(lam), np.linalg.inv(U))
-            )] 
+            self.slices += [
+                Slice(
+                    num_strikes=k0.shape[0] - 4,
+                    k=k0,
+                    k_next=k1,
+                    maturity_bounds=(self.maturities[j], self.maturities[j + 1]),
+                    density=variables["p"][j],
+                    omega=(k0[1:-1].reshape(1, -1) - k1.reshape(-1, 1)).clip(min=0),
+                    psi=compute_psi(k1),
+                    forward_op_decomp=(U, np.diag(lam), np.linalg.inv(U)),
+                )
+            ]
 
     def _interpolate_price(self, k: np.ndarray, tau: float) -> np.ndarray:
         assert tau <= self.maturities[-1], "Out of bounds: ttm"
@@ -388,9 +383,9 @@ class DiscreteLocalVolatilityModel:
         C_hat = np.zeros_like(k)
 
         T = np.unique(tau)
-        
+
         for i in range(len(T)):
-            c = (tau == T[i])
+            c = tau == T[i]
             C_hat[c] = self._interpolate_price(k[c], T[i])
 
         return C_hat.reshape(*shape)
@@ -407,7 +402,7 @@ class DiscreteLocalVolatilityModel:
 
         omega = (s.k[1:-1].reshape(1, -1) - k_aug.reshape(-1, 1)).clip(min=0)
 
-        C_tilda = omega@s.density
+        C_tilda = omega @ s.density
         C_hat = self.slices[j].interpolate(k_aug, tau)
 
         dt = tau - s.maturity_bounds[0]
@@ -422,16 +417,19 @@ class DiscreteLocalVolatilityModel:
         p = delta1 - delta0
 
         # Clip negligible amounts very close/below zero
-        gamma = (2*p / (dk_plus + dk_minus)).clip(min=0)
+        gamma = (2 * p / (dk_plus + dk_minus)).clip(min=0)
 
-        lv = np.where(
-            (gamma[1:-1] > 0) & (bt[2:-2] >= 0),
-            2*(bt[2:-2] / (gamma[1:-1]*k_aug[2:-2]**2*dt)),
-            0
-        )**0.5
+        lv = (
+            np.where(
+                (gamma[1:-1] > 0) & (bt[2:-2] >= 0),
+                2 * (bt[2:-2] / (gamma[1:-1] * k_aug[2:-2] ** 2 * dt)),
+                0,
+            )
+            ** 0.5
+        )
 
         return lv[np.argsort(idx)]
-    
+
     def get_dlvs(self, k: np.ndarray, tau: np.ndarray) -> np.ndarray:
         shape = k.shape
 
@@ -442,9 +440,9 @@ class DiscreteLocalVolatilityModel:
         lv_hat = np.zeros_like(k)
 
         T = np.unique(tau)
-        
+
         for i in range(len(T)):
-            c = (tau == T[i])
+            c = tau == T[i]
             lv_hat[c] = self._interpolate_dlv(k[c], T[i])
 
-        return lv_hat.reshape(*shape)**0.5
+        return lv_hat.reshape(*shape) ** 0.5

@@ -1,36 +1,51 @@
-
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-dockerfile
 {
-	"name": "Existing Dockerfile",
-	"build": {
-		// Sets the run context to one level up instead of the .devcontainer folder.
-		"context": "..",
-		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
-		"dockerfile": "Dockerfile"
-	},
+	"name": "gleam 1",
+	"dockerComposeFile": [
+		"../docker-compose.yml"
+	],
+	"service": "devcontainer",
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
+	"workspaceFolder": "/workspace",
+	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
+		"ghcr.io/devcontainers-contrib/features/poetry:2": {},
 		"ghcr.io/devcontainers/features/python:1": {
 			"installTools": true,
 			"installJupyterlab": true,
-			"version": "3.11"
+			"version": "3.12"
 		},
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	"forwardPorts": [],
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
-			"settings": {},
+			"settings": {
+				"editor.formatOnSave": true,
+				"[python]": {
+					"editor.defaultFormatter": "charliermarsh.ruff"
+				},
+				"editor.codeActionsOnSave": {
+					"source.organizeImports": true,
+					"source.fixAll": true
+				},
+				"python.defaultInterpreterPath": "./.venv/bin/python"
+			},
 			"extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance",
 				"ms-toolsai.jupyter",
 				"ms-toolsai.jupyter-keymap",
 				"ms-toolsai.jupyter-renderers",
 				"vscode-icons-team.vscode-icons",
 				"wayou.vscode-todo-highlight",
-				"timonwong.shellcheck"
-			  ]
+				"timonwong.shellcheck",
+				"charliermarsh.ruff",
+				"ms-python.python"
+			]
 		}
-	}	
+	},
+	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
+	"remoteUser": "vscode"
 }
