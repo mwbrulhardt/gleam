@@ -3,7 +3,7 @@ from scipy.stats import norm
 
 
 class Framework:
-    """A class for encapsulating both the numpy and torch framework."""
+    """A class for encapsulating both the numpy and torch framework into one common api."""
 
     _instances = {}
 
@@ -19,8 +19,8 @@ class Framework:
     @classmethod
     def get_framework(cls, backend: str) -> "Framework":
         if backend not in cls._instances:
-            cls._instance[backend] = Framework(backend)
-        return cls._instance[backend]
+            cls._instances[backend] = Framework(backend)
+        return cls._instances[backend]
 
     def log(self, x):
         return self._framework.log(x)
