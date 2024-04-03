@@ -42,6 +42,21 @@ pytest-mock = "^3.9"
 pytest-randomly = "^3.12"
 pytest-xdist = { version = "^3.1", extras = ["psutil"] }
 
+[tool.poetry.group.typing.dependencies]
+mypy = ">=1.8.0"
+
+[tool.ruff]
+extend-exclude = ["tests"]
+
+# Commented out for now
+# [tool.ruff.lint]
+# extend-select = [
+#    "D" # pydocstyle
+# ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

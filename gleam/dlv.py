@@ -4,7 +4,7 @@ from typing import List, Tuple
 import cvxpy as cp
 import numpy as np
 
-import gleam.pricing.black_scholes as bs
+import gleam.black_scholes as bs
 
 
 def delta(C, dk_plus):

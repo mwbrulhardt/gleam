@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from gleam.pricing import black_scholes as bs
+from gleam import black_scholes as bs
 
 
 def test_d1():
