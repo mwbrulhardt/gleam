@@ -30,13 +30,33 @@ def exp(x: TensorTypeOrScalar) -> TensorType:
     return x.exp()
 
 
+def sqrt(x: TensorTypeOrScalar) -> TensorType:
+    if isinstance(x, (int, float, np.ndarray)):
+        return np.sqrt(x)
+    return x.sqrt()
+
+
+def pow(x: TensorTypeOrScalar, d: float) -> TensorType:
+    if isinstance(x, (int, float, np.ndarray)):
+        return np.power(x, d)
+    return x.pow(d)
+
+
+def repeat(x: TensorType, repeats: int, axis: int):
+    if isinstance(x, np.ndarray):
+        return np.repeat(x, repeats=repeats, axis=axis)
+    repeat_shape = [1 for _ in range(x.shape[0])]
+    repeat_shape[axis] = repeats
+    return x.repeat(tuple(repeat_shape))
+
+
 def ones_like(x: TensorType) -> TensorType:
     if isinstance(x, np.ndarray):
         return np.ones_like(x)
     return torch.ones_like(x)
 
 
-def concat(*xs: TensorType, dim: int = 0):
+def concat(xs: TensorType, dim: int = 0):
     assert_same_type(xs)
     x = xs[0]
 
@@ -73,14 +93,12 @@ def to_numpy(*xs: TensorTypeOrScalar) -> Tuple[np.ndarray]:
     return (x.numpy() for x in xs)
 
 
-def to_torch(*xs: TensorTypeOrScalar) -> Tuple["torch.Tensor"]:
-    assert_same_type(xs)
-    x = xs[0]
+def to_torch(x: TensorTypeOrScalar) -> Tuple["torch.Tensor"]:
+    assert_same_type(x)
     if isinstance(x, (int, float)):
-        return (torch.tensor(x) for x in xs)
-    elif isinstance(x, np.ndarray):
-        return (torch.from_numpy(x) for x in xs)
-    return xs
+        return torch.tensor(x)
+    elif isinstance(x, list):
+        return torch.tensor(x)
 
 
 class linalg:
