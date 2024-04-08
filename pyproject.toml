@@ -8,7 +8,6 @@ readme = "README.md"
 [tool.poetry.dependencies]
 # Mandatory
 python = "^3.11"
-qdldl = { git = "https://github.com/osqp/qdldl-python.git"}
 
 scipy = "^1.11.4"
 py-vollib = "^1.0.1"
@@ -18,7 +17,7 @@ cvxpy = "^1.4.1"
 torch = {version = "^2.2.2", optional = true}
 
 [tool.poetry.extras]
-torch = ["torch"]
+torch = ["torch", "pylambertw"]
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.6.1"
@@ -43,7 +42,7 @@ pytest-randomly = "^3.12"
 pytest-xdist = { version = "^3.1", extras = ["psutil"] }
 
 [tool.poetry.group.typing.dependencies]
-mypy = ">=1.8.0"
+pyright = "^1.1.357"
 
 [tool.ruff]
 extend-exclude = ["tests"]
@@ -56,6 +55,9 @@ extend-exclude = ["tests"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
+
+[tool.pyright]
+include = ["gleam"]
 
 [build-system]
 requires = ["poetry-core"]
