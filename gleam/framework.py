@@ -10,7 +10,7 @@ except ImportError:
 
 
 TensorType = Union[np.ndarray, "torch.Tensor"]
-TensorTypeOrScalar = TensorType | float
+TensorTypeOrScalar = Union[TensorType, float]
 
 
 def assert_same_type(*xs: TensorTypeOrScalar):
