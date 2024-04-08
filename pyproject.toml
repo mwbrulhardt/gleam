@@ -8,11 +8,13 @@ readme = "README.md"
 [tool.poetry.dependencies]
 # Mandatory
 python = "^3.11"
-qdldl = { git = "https://github.com/osqp/qdldl-python.git"}
 
 scipy = "^1.11.4"
 py-vollib = "^1.0.1"
 cvxpy = "^1.4.1"
+
+torchlambertw = { git = "ssh://git@github.com/gmgeorg/torchlambertw.git"}
+
 
 # Extras
 torch = {version = "^2.2.2", optional = true}
