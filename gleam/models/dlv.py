@@ -1,3 +1,41 @@
+"""
+Discrete Local Volatility Model
+===============================
+
+This module provides an implementation of the Discrete Local Volatility (DLV) model
+for option pricing and implied volatility calculation. The DLV model is a discrete-
+space, discrete-time model that calibrates to a set of given option prices and
+allows for efficient pricing and risk management.
+
+The main components of the module are:
+
+- `delta`: Function to compute the delta of call prices.
+- `augment_data`: Function to augment the input data with ghost and boundary strikes
+  and call prices.
+- `correct_numerical_errors`: Function to correct numerical errors in the model
+  calibration.
+- `calibrate_dlvs`: Function to calibrate the discrete local volatility surface.
+- `compute_psi`: Function to compute the psi matrix for interpolation.
+- `compute_forward_op`: Function to compute the forward operator for the DLV model.
+- `Slice`: Class representing a slice of the DLV model, containing transition operators
+  and interpolation matrices.
+- `DiscreteLocalVolatilityModel`: Class implementing the DLV model, providing methods
+  for calibration, pricing, and implied volatility calculation.
+
+The `DiscreteLocalVolatilityModel` class inherits from `Estimator`, `PricingModel`,
+and `ImpliedVolatilityModel` base classes (not shown in this module) and provides
+the following methods:
+
+- `fit`: Calibrate the DLV model to market data.
+- `get_prices`: Get call prices for a given set of strike prices and maturities.
+- `get_ivs`: Get implied volatilities for a given set of strike prices and maturities.
+- `get_dlvs`: Get discrete local volatilities for a given set of strike prices and
+  maturities.
+
+The module also includes several helper functions for data augmentation, error
+correction, and matrix computations.
+"""
+
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -10,11 +48,53 @@ from gleam.models.base import (
 )
 
 
-def delta(C, dk_plus):
+def delta(C: np.array, dk_plus: np.array):
+    """
+    Compute the delta of the call prices.
+
+    Parameters
+    ----------
+    C : np.array
+        Call prices.
+    dk_plus : np.array
+        Differences between consecutive strike prices.
+
+    Returns
+    -------
+    np.array
+        Delta of the call prices.
+    """
     return (C[1:] - C[:-1]) / dk_plus
 
 
 def augment_data(prices, strikes, maturities, weights, bounds):
+    """
+    Augment the input data with ghost and boundary strikes and call prices.
+
+    Parameters
+    ----------
+    prices : list,
+        List of call prices for each maturity.
+    strikes : list,
+        List of strike prices for each maturity.
+    maturities : list,
+        List of maturities.
+    weights : list,
+        List of weights for each call price.
+    bounds : list,
+        List of lower and upper bounds for each maturity.
+
+    Returns
+    -------
+    tuple
+        Tuple containing augmented call prices, strike prices, maturities, and weights.
+
+    Notes
+    -----
+    This function adds ghost and boundary strikes and call prices to the input data.
+    It ensures that the strike range is increasing and that there are no repeated strikes
+    on each maturity.
+    """
     # Run validation check
     assert len(prices) == len(strikes) == len(maturities)
     assert len(bounds) == len(strikes)
@@ -56,6 +136,31 @@ def augment_data(prices, strikes, maturities, weights, bounds):
 
 
 def correct_numerical_errors(C, C_model, k, t):
+    """
+    Correct numerical errors in the model calibration.
+
+    Parameters
+    ----------
+    C : list
+        List of call prices for each maturity.
+    C_model : list,
+        List of modeled call prices for each maturity.
+    k : list,
+        List of strike prices for each maturity.
+    t : np.array,
+        Array of maturities.
+
+    Returns
+    -------
+    dict
+        Dictionary containing corrected model outputs.
+
+    Notes
+    -----
+    This function corrects numerical errors that may arise during the model calibration.
+    It ensures that the call prices at the boundary strikes match the intrinsic value
+    and computes the gamma, backward theta, and local volatility.
+    """
     m = t.shape[0]
 
     gamma = m * [None]
@@ -129,7 +234,43 @@ def calibrate_dlvs(
     implied_vol_min: float = 0.05,
     implied_vol_max: float = 3,
 ):
-    assert 0 <= local_vol_min <= local_vol_max, "Local volatility boundaries violated."
+    """
+    Calibrate the discrete local volatility surface.
+
+    Parameters
+    ----------
+    prices : List[List[float]]
+        List of call prices for each maturity.
+    strikes : List[List[float]]
+        List of strike prices for each maturity.
+    maturities : List[float]
+        List of maturities.
+    weights : List[List[float]]
+        List of weights for each call price.
+    bounds : List[Tuple[float, float]]
+        List of lower and upper bounds for each maturity.
+    local_vol_min : float, optional
+        Minimum local volatility, by default 0.01.
+    local_vol_max : float, optional
+        Maximum local volatility, by default 4.
+    implied_vol_min : float, optional
+        Minimum implied volatility, by default 0.05.
+    implied_vol_max : float, optional
+        Maximum implied volatility, by default 3.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the calibrated model outputs.
+
+    Notes
+    -----
+    This function calibrates the discrete local volatility surface by finding the
+    closest arbitrage-free call prices that satisfy the constraints on local and
+    implied volatility. It uses linear programming to solve the optimization problem.
+    """
+    assert 0 <= local_vol_min <= local_vol_max, \
+        "Local volatility boundaries violated."
 
     lv_min, lv_max = local_vol_min, local_vol_max
     iv_min, iv_max = implied_vol_min, implied_vol_max
@@ -200,7 +341,7 @@ def calibrate_dlvs(
     objective = cp.Minimize(loss)
 
     problem = cp.Problem(objective, constraints)
-    problem.solve()
+    problem.solve(solver=cp.ECOS)
 
     if not np.isfinite(problem.value):
         raise ValueError(f"Optimization infeasible. Value: {problem.value}")
@@ -209,6 +350,24 @@ def calibrate_dlvs(
 
 
 def compute_psi(k: np.ndarray):
+    """
+    Compute the psi matrix for interpolation.
+
+    Parameters
+    ----------
+    k : np.ndarray
+        Strike prices.
+
+    Returns
+    -------
+    np.ndarray
+        Psi matrix.
+
+    Notes
+    -----
+    The psi matrix is used for interpolating the call prices and densities between
+    different strike grids. It is computed using finite differences.
+    """
     n = len(k) - 4
 
     dk_plus = k[1:] - k[:-1]
@@ -229,8 +388,34 @@ def compute_psi(k: np.ndarray):
     return psi
 
 
-def compute_forward_op(k: np.ndarray, gamma: np.ndarray,
-                       backward_theta: np.ndarray):
+def compute_forward_op(
+    k: np.ndarray,
+    gamma: np.ndarray,
+    backward_theta: np.ndarray
+):
+    """
+    Compute the forward operator for the discrete local volatility model.
+
+    Parameters
+    ----------
+    k : np.ndarray
+        Strike prices.
+    gamma : np.ndarray
+        Gamma values.
+    backward_theta : np.ndarray
+        Backward theta values.
+
+    Returns
+    -------
+    np.ndarray
+        Forward operator.
+
+    Notes
+    -----
+    The forward operator represents the transition matrix between consecutive time steps
+    in the discrete local volatility model. It is computed using an implicit finite
+    difference scheme.
+    """
     dk_plus = k[2:] - k[1:-1]
     dk_minus = k[1:-1] - k[:-2]
     bt = backward_theta[1:-1]
@@ -255,6 +440,28 @@ def compute_forward_op(k: np.ndarray, gamma: np.ndarray,
 
 @dataclass
 class Slice:
+    """
+    Represents a slice of the discrete local volatility model.
+
+    Attributes
+    ----------
+    num_strikes : int
+        Number of strikes in the slice.
+    k : np.ndarray
+        Strike prices for the current maturity.
+    k_next : np.ndarray
+        Strike prices for the next maturity.
+    maturity_bounds : Tuple[float, float]
+        Lower and upper bounds of the maturity range.
+    density : np.ndarray
+        Density values for the current maturity.
+    omega : np.ndarray
+        Omega matrix for interpolation.
+    psi : np.ndarray
+        Psi matrix for interpolation.
+    forward_op_decomp : Tuple[np.ndarray, np.ndarray, np.ndarray]
+        Decomposition of the forward operator.
+    """
     num_strikes: int
     k: np.ndarray
     k_next: np.ndarray
@@ -265,6 +472,30 @@ class Slice:
     forward_op_decomp: Tuple[np.ndarray, np.ndarray, np.ndarray]
 
     def transition_op(self, tau: float) -> np.ndarray:
+        """
+        Compute the transition operator for a given maturity.
+
+        Parameters
+        ----------
+        tau : float
+            Maturity for which to compute the transition operator.
+
+        Returns
+        -------
+        np.ndarray
+            Transition operator.
+
+        Raises
+        ------
+        AssertionError
+            If the maturity is outside the bounds of the slice.
+
+        Notes
+        -----
+        The transition operator represents the transition probabilities between
+        strike prices at the given maturity. It is computed using the decomposition
+        of the forward operator and interpolation matrices.
+        """
         lower, upper = self.maturity_bounds
         assert lower < tau <= upper, "Maturity outside of range."
         U, D, U_inv = self.forward_op_decomp
@@ -279,6 +510,32 @@ class Slice:
         return f_op @ xi
 
     def interpolate(self, k: np.ndarray, tau: float) -> np.ndarray:
+        """
+        Interpolate call prices for a given set of strike prices and maturity.
+
+        Parameters
+        ----------
+        k : np.ndarray
+            Strike prices for which to interpolate the call prices.
+        tau : float
+            Maturity for which to interpolate the call prices.
+
+        Returns
+        -------
+        np.ndarray
+            Interpolated call prices.
+
+        Raises
+        ------
+        AssertionError
+            If the maturity is outside the bounds of the slice or if the strike prices
+            are not increasing.
+
+        Notes
+        -----
+        The call prices are interpolated using the transition operator and the density
+        values of the slice. The interpolation is performed using the omega matrix.
+        """
         lower, upper = self.maturity_bounds
         assert lower < tau <= upper, "Maturity outside of range."
         assert np.all(k[:-1] < k[1:]), "Strikes are not increasing."
@@ -295,6 +552,19 @@ class Slice:
 class DiscreteLocalVolatilityModel(
     Estimator, PricingModel, ImpliedVolatilityModel
 ):
+    """
+    Discrete Local Volatility model for option pricing and implied volatility.
+
+    Attributes
+    ----------
+    maturities : np.ndarray
+        Maturities of the model.
+    parameters : dict
+        Parameters of the calibrated model.
+    slices : List[Slice]
+        Slices of the model, representing the transition operators and densities.
+    """
+
     def __init__(self):
         self.maturities = None
         self.parameters = None
@@ -308,7 +578,30 @@ class DiscreteLocalVolatilityModel(
         local_vol_min: float = 0.01,
         local_vol_max: float = 4,
     ):
+        """
+        Calibrate the discrete local volatility model to market data.
 
+        Parameters
+        ----------
+        option_market_data : OptionMarketData
+            Market data for options, including prices, strikes, and maturities.
+        bounds : List[Tuple[float, float]]
+            Bounds for each maturity, representing the range of admissible strikes.
+        weights : np.ndarray, optional
+            Weights for each option in the calibration, by default None.
+        local_vol_min : float, optional
+            Minimum local volatility, by default 0.01.
+        local_vol_max : float, optional
+            Maximum local volatility, by default 4.
+
+        Notes
+        -----
+        The model is calibrated using the `calibrate_dlvs` function, which
+        finds the closest arbitrage-free call prices that satisfy the
+        constraints on local volatility. The calibrated parameters are
+        stored in the `parameters` attribute, and the slices of the model
+        are computed and stored in the `slices` attribute.
+        """
         prices = [p.tolist() for p in option_market_data.xprices]
         strikes = [p.tolist() for p in option_market_data.xstrikes]
         maturities = option_market_data._ttm
@@ -354,6 +647,26 @@ class DiscreteLocalVolatilityModel(
             ]
 
     def _interpolate_price(self, k: np.ndarray, tau: float) -> np.ndarray:
+        """
+        Interpolate call prices for a given set of strike prices and maturity.
+
+        Parameters
+        ----------
+        k : np.ndarray
+            Strike prices for which to interpolate the call prices.
+        tau : float
+            Maturity for which to interpolate the call prices.
+
+        Returns
+        -------
+        np.ndarray
+            Interpolated call prices.
+
+        Raises
+        ------
+        AssertionError
+            If the maturity is outside the bounds of the model.
+        """
         assert tau <= self.maturities[-1], "Out of bounds: ttm"
 
         if tau <= 0:
@@ -368,6 +681,26 @@ class DiscreteLocalVolatilityModel(
         return C_hat[np.argsort(idx)]
 
     def _get_prices(self, k: np.ndarray, tau: np.ndarray) -> np.ndarray:
+        """
+        Get call prices for a given set of strike prices and maturities.
+
+        Parameters
+        ----------
+        k : np.ndarray
+            Strike prices for which to get the call prices.
+        tau : np.ndarray
+            Maturities for which to get the call prices.
+
+        Returns
+        -------
+        np.ndarray
+            Call prices.
+
+        Notes
+        -----
+        The call prices are computed by interpolating the prices for each unique maturity
+        in `tau` and then reshaping the result to match the input shape of `k`.
+        """
         shape = k.shape
 
         if len(k.shape) == 2 and len(tau.shape) == 1 and k.shape[0] == \
@@ -388,6 +721,26 @@ class DiscreteLocalVolatilityModel(
     def get_prices(
         self, k: List[np.array], tau: List[float]
     ) -> List[np.array]:
+        """
+        Get call prices for a given set of strike prices and maturities.
+
+        Parameters
+        ----------
+        k : List[np.array]
+            Strike prices for each maturity.
+        tau : List[float]
+            Maturities for which to get the call prices.
+
+        Returns
+        -------
+        List[np.array]
+            Call prices for each maturity.
+
+        Raises
+        ------
+        AssertionError
+            If the maturities are not monotonically increasing.
+        """
         C_hat = [len(k_slice) * [0, ] for k_slice in k]
 
         assert all([t1 > t0 for t0, t1 in zip(tau[:-1], tau[1:])]), \
@@ -402,6 +755,21 @@ class DiscreteLocalVolatilityModel(
 
     def get_ivs(self, k: List[np.array], tau: List[float]
                 ) -> List[np.array]:
+        """
+        Get implied volatilities for a given set of strike prices and maturities.
+
+        Parameters
+        ----------
+        k : List[np.array]
+            Strike prices for each maturity.
+        tau : List[float]
+            Maturities for which to get the implied volatilities.
+
+        Returns
+        -------
+        List[np.array]
+            Implied volatilities for each maturity.
+        """
         prices = self.get_prices(k, tau)
         ivs = [
             bs.iv(V=V, S=1.0, tau=t, K=strikes)
@@ -410,6 +778,26 @@ class DiscreteLocalVolatilityModel(
         return ivs
 
     def _interpolate_dlv(self, k: np.ndarray, tau: float) -> np.ndarray:
+        """
+        Interpolate discrete local volatilities for a given set of strike prices and maturity.
+
+        Parameters
+        ----------
+        k : np.ndarray
+            Strike prices for which to interpolate the discrete local volatilities.
+        tau : float
+            Maturity for which to interpolate the discrete local volatilities.
+
+        Returns
+        -------
+        np.ndarray
+            Interpolated discrete local volatilities.
+
+        Raises
+        ------
+        AssertionError
+            If the maturity is outside the bounds of the model.
+        """
         assert tau <= self.maturities[-1], "Out of bounds: ttm"
 
         j = np.searchsorted(self.maturities, tau, side="left") - 1
@@ -458,6 +846,21 @@ class DiscreteLocalVolatilityModel(
     def get_dlvs(
         self, k: List[np.ndarray], tau: List[float]
     ) -> List[np.ndarray]:
+        """
+        Get discrete local volatilities for a given set of strike prices and maturities.
+
+        Parameters
+        ----------
+        k : List[np.ndarray]
+            Strike prices for each maturity.
+        tau : List[float]
+            Maturities for which to get the discrete local volatilities.
+
+        Returns
+        -------
+        List[np.ndarray]
+            Discrete local volatilities for each maturity.
+        """
         lv_hat = list()
 
         T = np.unique(tau)
