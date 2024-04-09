@@ -55,7 +55,6 @@ from gleam.models.base import OptionMarketData, Estimator, \
     ImpliedVolatilityModel, PricingModel
 from gleam.models.base import Slice
 from gleam.models.dlv import DiscreteLocalVolatilityModel
-import matplotlib.pyplot as plt
 
 
 def get_windows(df: pd.DataFrame, delta: pd.Timedelta, num_lags: int):
@@ -91,10 +90,7 @@ def windowed(df: pd.DataFrame, delta: pd.Timedelta, num_lags: int):
     """
     windows = get_windows(df, delta, num_lags)
     return np.concatenate(
-        [df.loc[windows[:, i]].values[..., None] for i in
-            range(num_lags)
-        ],
-        axis=1
+        [df.loc[windows[:, i]] for i in range(num_lags)], axis=1
     )
 
 
@@ -117,6 +113,8 @@ def fit_distribution(
         Slice: Slice object containing prices, strikes, and time to maturity.
     """
     data = windowed(df, delta, num_lags=2)
+    print(df.shape)
+    print(data.shape)
     rtn = data[:, 1:2] / data[:, 0:1]
     x = pd.DataFrame(data=rtn)
     clf = gaussianizing.Gaussianizer(lambertw_type="h", method="igmm")
@@ -170,8 +168,6 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
             strikes (List[List[float]]): List of strike prices for each time delta.
             bounds (List[Tuple[float, float]]): Bounds for the DLV model.
         """
-        prices = list()
-        ttm = list()
         self.data_strikes = strikes
 
         for delta, strike_slice in zip(deltas, strikes):
@@ -181,12 +177,10 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
             self.data_prices.append(slice.prices)
             self.data_ttm.append(slice.ttm)
 
-            # compute call prices
-
         market_data = OptionMarketData(
-            prices=prices,
+            prices=self.data_prices,
             strikes=strikes,
-            ttm=ttm,
+            ttm=self.data_ttm,
             spot=1.0,
         )
 
