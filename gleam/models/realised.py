@@ -113,8 +113,7 @@ def fit_distribution(
         Slice: Slice object containing prices, strikes, and time to maturity.
     """
     data = windowed(df, delta, num_lags=2)
-    print(df.shape)
-    print(data.shape)
+
     rtn = data[:, 1:2] / data[:, 0:1]
     x = pd.DataFrame(data=rtn)
     clf = gaussianizing.Gaussianizer(lambertw_type="h", method="igmm")
