@@ -157,14 +157,15 @@ def iv(
     """
 
     is_numpy = isinstance(V, np.ndarray)
-    V, S, K, tau, r, q, w = fw.to_numpy(V, S, K, tau, r, q, w)
-    option_type = np.where(w == 1, "c", "p")
+    is_float_or_int = isinstance(V, (int, float))
 
-    sigma: np.ndarray = jackel_iv(V, S, K, tau, r, q, option_type)
+    if not (is_numpy or is_float_or_int):
+        V, S, K, tau, r, q, w = fw.to_numpy(V, S, K, tau, r, q, w)
 
-    if is_numpy:
-        return sigma
-    return fw.to_torch(sigma)
+        sigma: np.ndarray = jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
+        return fw.to_torch(sigma)[0]
+
+    return jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
 
 
 def delta(
