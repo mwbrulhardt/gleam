@@ -120,7 +120,7 @@ class dist:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.cdf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
-            return dist.cdf(x, loc, scale)
+            return dist.cdf(x)
 
         def icdf(x, loc=0, scale=1):
             if isinstance(x, (int, float, np.ndarray)):
