@@ -263,7 +263,3 @@ def test_dlv_model_get_dlvs(option_market_data):
     dlvs_test = model.get_dlvs(k_test, tau_test)
     assert len(dlvs_test) == len(tau_test)
     assert all(len(dlv) == len(k) for dlv, k in zip(dlvs_test, k_test))
-
-
-if __name__ == '__main__':
-    test_dlv()
