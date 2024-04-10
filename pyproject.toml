@@ -57,6 +57,9 @@ extend-exclude = ["tests"]
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
+[tool.pyright]
+include = ["gleam"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

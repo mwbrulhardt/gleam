@@ -170,6 +170,8 @@ def iv(
 
     Parameters
     ----------
+    V : fw.TensorTypeOrScalar
+        The valuation of the option.
     S : fw.TensorTypeOrScalar
         The spot price for the underlying asset.
     K : fw.TensorTypeOrScalar
@@ -194,17 +196,15 @@ def iv(
     """
 
     is_numpy = isinstance(V, np.ndarray)
-    V, S, K, tau = fw.to_numpy(V, S, K, tau)
-    r = fw.to_numpy(r)
-    q = fw.to_numpy(q)
-    w = fw.to_numpy(w)
-    option_type = np.where(w == 1, "c", "p")
+    is_float_or_int = isinstance(V, (int, float))
 
-    sigma = jackel_iv(V, S, K, tau, r, q, option_type)
+    if not (is_numpy or is_float_or_int):
+        V, S, K, tau, r, q, w = fw.to_numpy(V, S, K, tau, r, q, w)
 
-    if is_numpy:
-        return sigma
-    return fw.to_torch(sigma)
+        sigma: np.ndarray = jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
+        return fw.to_torch(sigma)
+
+    return jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
 
 
 def delta(
@@ -276,9 +276,10 @@ def vega(
     fw.TensorTypeOrScalar
         The vega of an option under the Black-Scholes-Merton model.
     """
-    U = fw.where(w == 1, S, K)
-    d = fw.where(w == 1, d1(S, K, tau, sigma, r, q), d2(S, K, tau, sigma, r, q))
-    rate = fw.where(w == 1, q, r)
+    c: fw.TensorType | bool = w == 1
+    U = fw.where(c, S, K)
+    d = fw.where(c, d1(S, K, tau, sigma, r, q), d2(S, K, tau, sigma, r, q))
+    rate = fw.where(c, q, r)
     return U * fw.exp(-rate * tau) * fw.dist.normal.pdf(d) * tau**0.5
 
 

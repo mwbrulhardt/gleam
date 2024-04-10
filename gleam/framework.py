@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import TYPE_CHECKING, List, Tuple, Union, overload
 
 import numpy as np
 from scipy.stats import norm
@@ -8,14 +8,17 @@ try:
 except ImportError:
     pass
 
+if TYPE_CHECKING:
+    import torch
 
 TensorType = Union[np.ndarray, "torch.Tensor"]
 TensorTypeOrScalar = Union[TensorType, float]
 
 
-def assert_same_type(*xs: TensorTypeOrScalar):
-    T = type(xs[0])
-    assert all(isinstance(x, T) for x in xs), "All inputs are not of same type."
+def assert_same_type(x: TensorTypeOrScalar, *xs: TensorTypeOrScalar):
+    T = type(x)
+    if len(xs) < 0:
+        assert all(isinstance(x, T) for x in xs), "All inputs are not of same type."
 
 
 def log(x: TensorTypeOrScalar) -> TensorType:
@@ -56,22 +59,44 @@ def ones_like(x: TensorType) -> TensorType:
     return torch.ones_like(x)
 
 
-def concat(xs: TensorType, dim: int = 0):
-    assert_same_type(xs)
-    x = xs[0]
+@overload
+def concat(xs: List["torch.Tensor"], dim: int) -> "torch.Tensor":
+    ...
 
-    if isinstance(x, np.ndarray):
+
+@overload
+def concat(xs: List[np.ndarray], dim: int) -> np.ndarray:
+    ...
+
+
+def concat(xs, dim: int = 0) -> TensorType:
+    if all(isinstance(x, np.ndarray) for x in xs):
         return np.concatenate(xs, axis=dim)
     return torch.concat(xs, dim=dim)
 
 
 def where(
-    condition: TensorType, input: TensorTypeOrScalar, other: TensorTypeOrScalar
-) -> TensorType:
-    if isinstance(condition, (int, float, np.ndarray)):
+    condition: TensorType | bool, input: TensorTypeOrScalar, other: TensorTypeOrScalar
+) -> TensorTypeOrScalar:
+    if (
+        isinstance(condition, bool)
+        and isinstance(input, (float, int))
+        and isinstance(other, (float, int))
+    ):
+        return input if condition else other
+    elif (
+        isinstance(condition, np.ndarray)
+        and isinstance(input, (float, int, np.ndarray))
+        and isinstance(other, (float, int, np.ndarray))
+    ):
         return np.where(condition, input, other)
-
-    return torch.where(condition, input, other)
+    elif (
+        not isinstance(condition, (np.ndarray, bool))
+        and not isinstance(input, np.ndarray)
+        and not isinstance(other, np.ndarray)
+    ):
+        return torch.where(condition, input, other)
+    raise Exception("Mismatch in types.")
 
 
 def _to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
@@ -82,20 +107,29 @@ def _to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
     return x.numpy()
 
 
-def to_numpy(*xs: TensorTypeOrScalar) -> Tuple[np.ndarray, ...]:
-    if len(xs) > 1:
-        return [_to_numpy(x) for x in xs]
-    else:
-        return _to_numpy(xs[0])
+def to_numpy(*xs: TensorTypeOrScalar) -> np.ndarray | Tuple[np.ndarray, ...]:
+    output = tuple(_to_numpy(x) for x in xs)
+    return output[0] if len(output) == 1 else output
 
 
-def to_torch(x: TensorTypeOrScalar) -> Tuple["torch.Tensor"]:
-    assert_same_type(x)
-    return torch.Tensor(x)
+def _to_torch(x: TensorTypeOrScalar) -> "torch.Tensor":
+    if isinstance(x, (int, float, list)):
+        return torch.tensor(x)
+    elif isinstance(x, np.ndarray):
+        return torch.from_numpy(x)
+    return x
+
+
+def to_torch(
+    *xs: TensorTypeOrScalar | list,
+) -> "torch.Tensor" | Tuple["torch.Tensor", ...]:
+    output = tuple(_to_torch(x) for x in xs)
+    return output[0] if len(output) == 1 else output
 
 
 class linalg:
-    def inv(x: TensorType):
+    @staticmethod
+    def inv(x: TensorType) -> TensorType:
         if isinstance(x, np.ndarray):
             return np.linalg.inv(x)
         return torch.linalg.inv(x)
@@ -103,19 +137,35 @@ class linalg:
 
 class dist:
     class normal:
-        def pdf(x: TensorTypeOrScalar, loc=0, scale=1):
+        @staticmethod
+        def pdf(
+            x: TensorTypeOrScalar,
+            loc: TensorTypeOrScalar = 0,
+            scale: TensorTypeOrScalar = 1,
+        ) -> TensorTypeOrScalar:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.pdf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
             return dist.log_prob(x).exp()
+            return dist.log_prob(x).exp()
 
-        def cdf(x, loc=0, scale=1):
+        @staticmethod
+        def cdf(
+            x: TensorTypeOrScalar,
+            loc: TensorTypeOrScalar = 0,
+            scale: TensorTypeOrScalar = 1,
+        ) -> TensorTypeOrScalar:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.cdf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
             return dist.cdf(x)
 
-        def icdf(x, loc=0, scale=1):
+        @staticmethod
+        def icdf(
+            x: TensorTypeOrScalar,
+            loc: TensorTypeOrScalar = 0,
+            scale: TensorTypeOrScalar = 1,
+        ) -> TensorTypeOrScalar:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.ppf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)

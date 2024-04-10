@@ -38,7 +38,6 @@ class QuadraticLog(Estimator, PricingModel, ImpliedVolatilityModel):
         M = fw.log(F / K) / tau**0.5
 
         features = [fw.ones_like(M), M, M**2, tau, M * tau]
-        print(features)
         X = fw.concat(features, dim=1)
         return X
 
