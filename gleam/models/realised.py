@@ -43,6 +43,7 @@ The model is flexible and can be fitted to different time series and market data
 to various underlying assets and market conditions. It provides a framework for incorporating realized
 volatility into option pricing and risk management.
 """
+
 from typing import List, Tuple
 
 import numpy as np
@@ -51,9 +52,13 @@ import torch
 import torchlambertw
 from pylambertw.preprocessing import gaussianizing
 
-from gleam.models.base import OptionMarketData, Estimator, \
-    ImpliedVolatilityModel, PricingModel
-from gleam.models.base import Slice
+from gleam.models.base import (
+    Estimator,
+    ImpliedVolatilityModel,
+    OptionMarketData,
+    PricingModel,
+    Slice,
+)
 from gleam.models.dlv import DiscreteLocalVolatilityModel
 
 
@@ -89,16 +94,11 @@ def windowed(df: pd.DataFrame, delta: pd.Timedelta, num_lags: int):
         np.ndarray: Windowed representation of the time series.
     """
     windows = get_windows(df, delta, num_lags)
-    return np.concatenate(
-        [df.loc[windows[:, i]] for i in range(num_lags)], axis=1
-    )
+    return np.concatenate([df.loc[windows[:, i]] for i in range(num_lags)], axis=1)
 
 
 def fit_distribution(
-    df: pd.DataFrame,
-    delta: pd.Timedelta,
-    strikes: List[float],
-    n_iters: int = 500000
+    df: pd.DataFrame, delta: pd.Timedelta, strikes: List[float], n_iters: int = 500000
 ):
     """
     Fits a distribution to the input time series and computes option prices.
@@ -129,8 +129,7 @@ def fit_distribution(
     pdf = dist.log_prob(x).double().exp()
     strikes = torch.Tensor(strikes)
 
-    b = pdf.unsqueeze(1) * \
-        (x.unsqueeze(1) - strikes.unsqueeze(0).double()).relu()
+    b = pdf.unsqueeze(1) * (x.unsqueeze(1) - strikes.unsqueeze(0).double()).relu()
     a = 0.5 * (b[1:] + b[:-1]) * (x[1:] - x[:-1]).unsqueeze(-1)
 
     prices = a.sum(0)
@@ -156,7 +155,7 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
         time_series: pd.DataFrame,
         deltas: List[pd.Timedelta],
         strikes: List[List[float]],
-        bounds: List[Tuple[float, float]]
+        bounds: List[Tuple[float, float]],
     ):
         """
         Fits the Realised Model DLV to the input time series and market data.
@@ -170,9 +169,7 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
         self.data_strikes = strikes
 
         for delta, strike_slice in zip(deltas, strikes):
-            slice = fit_distribution(
-                time_series, delta, strike_slice
-            )
+            slice = fit_distribution(time_series, delta, strike_slice)
             self.data_prices.append(slice.prices)
             self.data_ttm.append(slice.ttm)
 
@@ -183,14 +180,9 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
             spot=1.0,
         )
 
-        self.dlv.fit(
-            option_market_data=market_data,
-            bounds=bounds
-        )
+        self.dlv.fit(option_market_data=market_data, bounds=bounds)
 
-    def get_prices(
-        self, k: List[np.array], tau: List[float]
-    ) -> List[np.array]:
+    def get_prices(self, k: List[np.array], tau: List[float]) -> List[np.array]:
         """
         Computes option prices using the fitted DLV model.
 
@@ -203,9 +195,7 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
         """
         return self.dlv.get_prices(k, tau)
 
-    def get_ivs(
-        self, k: List[np.array], tau: List[float]
-    ) -> List[np.array]:
+    def get_ivs(self, k: List[np.array], tau: List[float]) -> List[np.array]:
         """
         Computes implied volatilities using the fitted DLV model.
 
@@ -217,5 +207,3 @@ class RealisedModelDLV(Estimator, PricingModel, ImpliedVolatilityModel):
             List[np.array]: List of computed implied volatilities.
         """
         return self.dlv.get_ivs(k, tau)
-
-

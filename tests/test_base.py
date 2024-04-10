@@ -77,8 +77,8 @@ def test_to_conversion_numpy(option_market_data):
 
 def test_to_conversion_torch(option_market_data):
     option_market_data.torch()
-    assert option_market_data.to([1, 2, 3]).dtype == torch.tensor(
-        [1, 2, 3]).dtype
+    assert option_market_data.to([1.0, 2.0, 3.0]).dtype == torch.tensor(
+        [1.0, 2.0, 3.0]).dtype
 
 
 def test_invalid_input_raises_error():

@@ -1,4 +1,4 @@
-from typing import Tuple, Union, overload
+from typing import Tuple, Union
 
 import numpy as np
 from scipy.stats import norm
@@ -74,8 +74,7 @@ def where(
     return torch.where(condition, input, other)
 
 
-@overload
-def to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
+def _to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
     if isinstance(x, (int, float)):
         return np.array(x)
     elif isinstance(x, np.ndarray):
@@ -83,22 +82,16 @@ def to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
     return x.numpy()
 
 
-def to_numpy(*xs: TensorTypeOrScalar) -> Tuple[np.ndarray]:
-    assert_same_type(xs)
-    x = xs[0]
-    if isinstance(x, (int, float)):
-        return (np.array(x) for x in xs)
-    elif isinstance(x, np.ndarray):
-        return xs
-    return (x.numpy() for x in xs)
+def to_numpy(*xs: TensorTypeOrScalar) -> Tuple[np.ndarray, ...]:
+    if len(xs) > 1:
+        return [_to_numpy(x) for x in xs]
+    else:
+        return _to_numpy(xs[0])
 
 
 def to_torch(x: TensorTypeOrScalar) -> Tuple["torch.Tensor"]:
     assert_same_type(x)
-    if isinstance(x, (int, float)):
-        return torch.tensor(x)
-    elif isinstance(x, list):
-        return torch.tensor(x)
+    return torch.Tensor(x)
 
 
 class linalg:
@@ -114,7 +107,7 @@ class dist:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.pdf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
-            return dist.pdf(x, loc, scale)
+            return dist.log_prob(x).exp()
 
         def cdf(x, loc=0, scale=1):
             if isinstance(x, (int, float, np.ndarray)):
@@ -126,4 +119,4 @@ class dist:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.ppf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
-            return dist.icdf(x, loc, scale)
+            return dist.icdf(x)

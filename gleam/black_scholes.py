@@ -3,7 +3,6 @@
 This file include functions for computing call prices as well as implied volatilities.
 """
 
-
 import numpy as np
 from py_vollib.black_scholes_merton.implied_volatility import implied_volatility
 
@@ -124,7 +123,7 @@ def d_plus(
     sigma: fw.TensorTypeOrScalar,
 ):
     a = 1.0 / (sigma * fw.sqrt(tau))
-    b = (fw.log(F / K) + 0.5 * fw.pow(sigma, 2) * tau)
+    b = fw.log(F / K) + 0.5 * fw.pow(sigma, 2) * tau
     return a * b
 
 
@@ -145,7 +144,6 @@ def price_black(
     r: fw.TensorTypeOrScalar = 0,
     w: fw.TensorTypeOrScalar = 1,
 ):
-
     D = fw.exp(-1.0 * r * tau)
     norm_plus = fw.dist.normal.cdf(d_plus(F, K, tau, sigma))
     norm_minus = fw.dist.normal.cdf(d_minus(F, K, tau, sigma))
@@ -156,7 +154,6 @@ def price_black(
         return C
     else:
         return C - D * (F - K)
-
 
 
 def iv(
@@ -197,7 +194,10 @@ def iv(
     """
 
     is_numpy = isinstance(V, np.ndarray)
-    V, S, K, tau, r, q, w = fw.to_numpy(V, S, K, tau, r, q, w)
+    V, S, K, tau = fw.to_numpy(V, S, K, tau)
+    r = fw.to_numpy(r)
+    q = fw.to_numpy(q)
+    w = fw.to_numpy(w)
     option_type = np.where(w == 1, "c", "p")
 
     sigma = jackel_iv(V, S, K, tau, r, q, option_type)

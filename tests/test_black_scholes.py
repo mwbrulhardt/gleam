@@ -7,6 +7,8 @@ from py_vollib.black_scholes_merton.greeks.analytical import delta as bs_delta
 from py_vollib.black_scholes_merton.greeks.analytical import vega as bs_vega
 from py_vollib.black_scholes_merton.implied_volatility import \
     implied_volatility as bs_iv
+from py_vollib.black_scholes_merton.implied_volatility import \
+    implied_volatility as bs_iv
 
 from gleam.black_scholes import price, delta, vega, iv, delta_strike, \
     d_plus, d_minus
@@ -74,11 +76,15 @@ def test_vega(tensor_type):
     sigma = tensor_type([0.2, 0.2])
     r = tensor_type([0.05, 0.05])
     q = tensor_type([0.0, 0.0])
+    flag = ['c', 'p']
+    w = tensor_type([1, -1])
 
-    expected_vega = [bs_vega(S[i], K[i], tau[i], r[i], sigma[i], q[i]) for i in
-                     range(len(S))]
+    expected_vega = [
+        bs_vega(flag[i], S[i], K[i], tau[i], r[i], sigma[i], q[i])
+        for i in range(len(S))
+    ]
 
-    output_vega = vega(S, K, tau, sigma, r, q)
+    output_vega = vega(S, K, tau, sigma, r, q, w) / 100
 
     return_type = np.ndarray if tensor_type == np.array else torch.Tensor
     assert type(output_vega) == return_type
@@ -86,22 +92,54 @@ def test_vega(tensor_type):
     assert_allclose(output_vega, expected_vega, atol=1e-6, rtol=1e-5)
 
 
-@pytest.mark.parametrize("tensor_type", [np.array, torch.Tensor])
+@pytest.mark.parametrize("tensor_type", [np.array, torch.tensor])
 def test_iv(tensor_type):
-    V = tensor_type([22.63, 9.37])
-    S = tensor_type([100, 100])
-    K = tensor_type([90, 110])
-    tau = tensor_type([1, 1])
-    r = tensor_type([0.05, 0.05])
-    q = tensor_type([0.0, 0.0])
+    C_list = [22.63, 1.37]
+    P_list = [1.63, 10.37]
+    S_list = [100.0, 100.0]
+    K_list = [90.0, 110.0]
+    tau_list = [1.0, 1.0]
+    r_list = [0.05, 0.05]
+    q_list = [0.0, 0.0]
+    C = tensor_type(C_list)
+    P = tensor_type(P_list)
+    S = tensor_type(S_list)
+    K = tensor_type(K_list)
+    tau = tensor_type(tau_list)
+    r = tensor_type(r_list)
+    q = tensor_type(q_list)
 
-    expected_call_iv = [bs_iv(V[i], S[i], K[i], tau[i], r[i], q[i], 'c') for i
-                        in range(len(V))]
-    expected_put_iv = [bs_iv(V[i], S[i], K[i], tau[i], r[i], q[i], 'p') for i
-                       in range(len(V))]
-
-    call_iv = iv(V, S, K, tau, r, q)
-    put_iv = iv(V, S, K, tau, r, q, w=-1)
+    expected_call_iv = [
+        bs_iv(
+            C_list[i],
+            S_list[i],
+            K_list[i],
+            tau_list[i],
+            r_list[i],
+            q_list[i],
+            'c'
+        )
+        for i in range(len(C))
+    ]
+    expected_put_iv = [
+        bs_iv(
+            P_list[i],
+            S_list[i],
+            K_list[i],
+            tau_list[i],
+            r_list[i],
+            q_list[i],
+            'p'
+        )
+        for i in range(len(P))
+    ]
+    for i in range(len(C)):
+        if isinstance(expected_call_iv[i], torch.Tensor):
+            expected_call_iv[i] = expected_call_iv[i].item()
+        if isinstance(expected_put_iv[i], torch.Tensor):
+            expected_put_iv[i] = expected_put_iv[i].item()
+    call_iv = iv(C, S, K, tau, r, q)
+    put_iv = iv(P, S, K, tau, r, q, w=tensor_type([-1]))
 
     return_type = np.ndarray if tensor_type == np.array else torch.Tensor
     assert type(call_iv) == return_type
@@ -119,8 +157,9 @@ def test_delta_strike(tensor_type):
     r = tensor_type([0.05, 0.05])
     q = tensor_type([0.0, 0.0])
 
-    call_strikes = delta_strike(S, delta_val, tau, sigma, r, q)
-    put_strikes = delta_strike(S, delta_val, tau, sigma, r, q, w=-1)
+    call_strikes = delta_strike(S, delta_val, tau, sigma, r, q, w=tensor_type([1]))
+    put_strikes = delta_strike(S, delta_val, tau, sigma, r, q,
+                               w=tensor_type([-1]))
 
     call_deltas = [
         bs_delta('c', S[i], call_strikes[i], tau[i], r[i], sigma[i], q[i])
@@ -133,7 +172,7 @@ def test_delta_strike(tensor_type):
     assert type(call_strikes) == return_type
     assert type(put_strikes) == return_type
     assert_allclose(call_deltas, delta_val, atol=1e-3)
-    assert_allclose(put_deltas, delta_val, atol=1e-3)
+    assert_allclose(put_deltas, -delta_val, atol=1e-3)
 
 
 @pytest.mark.parametrize("tensor_type", [np.array, torch.Tensor])

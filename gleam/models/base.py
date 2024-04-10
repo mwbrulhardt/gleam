@@ -28,14 +28,15 @@ class PricingModel(ABC):
 
 @dataclass
 class Slice:
-    """ Option price slice. """
+    """Option price slice."""
+
     prices: List[float,]
     strikes: List[float,]
     ttm: float
     spot: float
-    forwards: Optional[float] = None,
-    rates: Optional[float] = None,
-    w: int = 1,
+    forwards: Optional[float] = (None,)
+    rates: Optional[float] = (None,)
+    w: int = (1,)
 
 
 class OptionMarketData:
@@ -62,7 +63,7 @@ class OptionMarketData:
         forwards: Optional[List[float]] = None,
         rates: Optional[List[float]] = None,
         w: int = 1,
-        framework: Optional[str] = 'numpy'
+        framework: Optional[str] = "numpy",
     ):
         """
         Initialize OptionMarketData with provided parameters.
@@ -82,16 +83,22 @@ class OptionMarketData:
             AssertionError: If input data does not meet requirements.
         """
         # Check formatting.
-        assert all([t1 > t0 for t0, t1 in zip(ttm[:-1], ttm[1:])]), \
-            "Time to maturity has to be monotonically increasing."
-        assert all([
-            all([k1 > k0 for k0, k1 in zip(strikes[i][:-1], strikes[i][1:])]
-                for i in range(len(strikes)))]), \
-            "Each slice of strikes has to be monotonically increasing."
+        assert all(
+            [t1 > t0 for t0, t1 in zip(ttm[:-1], ttm[1:])]
+        ), "Time to maturity has to be monotonically increasing."
+        assert all(
+            [
+                all(
+                    [k1 > k0 for k0, k1 in zip(strikes[i][:-1], strikes[i][1:])]
+                    for i in range(len(strikes))
+                )
+            ]
+        ), "Each slice of strikes has to be monotonically increasing."
 
         for price_slice, strike_slice in zip(prices, strikes):
-            assert len(price_slice) == len(strike_slice), \
-                "Length of price slice and strike slice must coincide."
+            assert len(price_slice) == len(
+                strike_slice
+            ), "Length of price slice and strike slice must coincide."
 
         assert len(prices) == len(strikes) == len(ttm)
         if rates is not None:
@@ -110,12 +117,16 @@ class OptionMarketData:
         self._framework = framework
 
         if rates is None:
-            self._rates = len(strikes) * [0.0, ]
+            self._rates = len(strikes) * [
+                0.0,
+            ]
         else:
             self._rates = rates
 
     @property
-    def prices(self, ):
+    def prices(
+        self,
+    ):
         """List of option prices."""
         return [self.to(price) for price in self._prices]
 
@@ -139,17 +150,15 @@ class OptionMarketData:
         """List of interest rates."""
 
         return [
-            fw.repeat(self.to(r), repeats=len(K), axis=0) for r, K
-            in zip(self._rates, self.strikes)
+            fw.repeat(self.to(r), repeats=len(K), axis=0)
+            for r, K in zip(self._rates, self.strikes)
         ]
 
     @property
     def discount_factors(self):
         """List of discount factors."""
 
-        return [
-            fw.exp(-1.0 * r * T) for r, T in zip(self._rates, self.ttm)
-        ]
+        return [fw.exp(-1.0 * r * T) for r, T in zip(self._rates, self.ttm)]
 
     @property
     def forwards(self):
@@ -162,8 +171,8 @@ class OptionMarketData:
     def ttm(self):
         """List of time to maturity (annualized)."""
         return [
-            fw.repeat(self.to(T), repeats=len(K), axis=0) for T, K
-            in zip(self._ttm, self.strikes)
+            fw.repeat(self.to(T), repeats=len(K), axis=0)
+            for T, K in zip(self._ttm, self.strikes)
         ]
 
     @property
@@ -172,12 +181,17 @@ class OptionMarketData:
         return [
             bs.iv(V=V, S=self._spot, K=K, tau=tau, r=r, w=self._w)
             for (V, K, tau, r) in zip(
-                self.prices, self.strikes, self.ttm, self.rates,
+                self.prices,
+                self.strikes,
+                self.ttm,
+                self.rates,
             )
         ]
 
     @property
-    def delta_plus(self, ):
+    def delta_plus(
+        self,
+    ):
         dp_list = list()
         for p, k in zip(self.prices, self.strikes):
             if len(p) >= 3:
@@ -188,7 +202,9 @@ class OptionMarketData:
         return dp_list
 
     @property
-    def delta_minus(self, ):
+    def delta_minus(
+        self,
+    ):
         dm_list = list()
         for p, k in zip(self.prices, self.strikes):
             if len(p) >= 3:
@@ -199,7 +215,9 @@ class OptionMarketData:
         return dm_list
 
     @property
-    def sofd(self, ) -> List[np.array]:
+    def sofd(
+        self,
+    ) -> List[np.array]:
         """List of second order finite differences."""
         butterflies = list()
         for dm, dp in zip(self.delta_plus, self.delta_minus):
@@ -220,20 +238,19 @@ class OptionMarketData:
         Returns:
             fw.TensorType: Converted input.
         """
-        if self._framework == 'torch':
-            print(fw.to_torch(x))
-            print(x)
+        if self._framework == "torch":
             return fw.to_torch(x)
-        elif self._framework == 'numpy':
+        elif self._framework == "numpy":
             return np.array(x)
-        else:
+        elif self._framework == "list":
             return x
+        else:
+            raise NotImplementedError("Framework %s not implemented" % self._framework)
 
     def torch(self):
-        """ Change framework to torch. """
-        self._framework = 'torch'
+        """Change framework to torch."""
+        self._framework = "torch"
 
     def numpy(self):
-        """ Change framework to numpy. """
-        self._framework = 'numpy'
-
+        """Change framework to numpy."""
+        self._framework = "numpy"
