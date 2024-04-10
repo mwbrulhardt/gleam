@@ -44,7 +44,10 @@ import numpy as np
 
 import gleam.black_scholes as bs
 from gleam.models.base import (
-    OptionMarketData, Estimator, PricingModel, ImpliedVolatilityModel
+    Estimator,
+    ImpliedVolatilityModel,
+    OptionMarketData,
+    PricingModel,
 )
 
 
@@ -67,7 +70,13 @@ def delta(C: np.array, dk_plus: np.array):
     return (C[1:] - C[:-1]) / dk_plus
 
 
-def augment_data(prices, strikes, maturities, weights, bounds):
+def augment_data(
+    prices: List[List[float]],
+    strikes: List[List[float]],
+    maturities: List[float],
+    weights: List[List[float]],
+    bounds: List[Tuple[float, float]],
+) -> (List[np.ndarray], List[np.ndarray], np.ndarray, List[np.ndarray]):
     """
     Augment the input data with ghost and boundary strikes and call prices.
 
@@ -122,10 +131,8 @@ def augment_data(prices, strikes, maturities, weights, bounds):
         # Check conditions for expanding strike range
         assert min(k[-1]) < 1, "Missing strike on left side."
         assert max(k[-1]) > 1, "Missing strike on right side."
-        assert min(k[-1]) <= min(
-            k[-2]), "Grid not expanding. Lower bound violation."
-        assert max(k[-1]) >= max(
-            k[-2]), "Grid not expanding. Upper bound violation."
+        assert min(k[-1]) <= min(k[-2]), "Grid not expanding. Lower bound violation."
+        assert max(k[-1]) >= max(k[-2]), "Grid not expanding. Upper bound violation."
         assert len(np.unique(strikes[j - 1])) == len(
             strikes[j - 1]
         ), f"Repeated strikes on maturity {t[j]}"
@@ -135,7 +142,9 @@ def augment_data(prices, strikes, maturities, weights, bounds):
     return C, k, t, w
 
 
-def correct_numerical_errors(C, C_model, k, t):
+def correct_numerical_errors(
+    C: List[np.array], C_model: List[cp.Variable], k: List[np.array], t: np.array
+):
     """
     Correct numerical errors in the model calibration.
 
@@ -192,8 +201,7 @@ def correct_numerical_errors(C, C_model, k, t):
         gamma[j] = 2 * (delta1 - delta0) / (dk_plus + dk_minus)
 
         # i = -2 : n_j + 1
-        omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(
-            min=0)
+        omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(min=0)
         backward_theta[j] = C_mod[j] - omega @ p[j - 1]
 
         # i = -1 : n_j
@@ -202,8 +210,7 @@ def correct_numerical_errors(C, C_model, k, t):
         lv[j] = (
             np.where(
                 (gamma[j][1:-1] > 0) & (backward_theta[j][2:-2] >= 0),
-                2 * (backward_theta[j][2:-2] / (
-                        gamma[j][1:-1] * k[j][2:-2] ** 2 * dt)),
+                2 * (backward_theta[j][2:-2] / (gamma[j][1:-1] * k[j][2:-2] ** 2 * dt)),
                 0,
             )
             ** 0.5
@@ -269,8 +276,7 @@ def calibrate_dlvs(
     closest arbitrage-free call prices that satisfy the constraints on local and
     implied volatility. It uses linear programming to solve the optimization problem.
     """
-    assert 0 <= local_vol_min <= local_vol_max, \
-        "Local volatility boundaries violated."
+    assert 0 <= local_vol_min <= local_vol_max, "Local volatility boundaries violated."
 
     lv_min, lv_max = local_vol_min, local_vol_max
     iv_min, iv_max = implied_vol_min, implied_vol_max
@@ -310,14 +316,13 @@ def calibrate_dlvs(
         gamma[j] = 2 * (delta1 - delta0) / (dk_plus + dk_minus)
 
         # i = -2 : n_j + 1
-        omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(
-            min=0)
+        omega = (k[j - 1][1:-1].reshape(-1, 1).T - k[j].reshape(-1, 1)).clip(min=0)
         backward_theta[j] = C_model[j] - omega @ p[j - 1]
 
         # i = -1 : n_j
         dt = t[j] - t[j - 1]
-        lb = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_min ** 2
-        ub = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_max ** 2
+        lb = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_min**2
+        ub = 0.5 * cp.multiply(gamma[j], k[j][1:-1] ** 2) * dt * lv_max**2
 
         constraints += [
             # i = 0 : n_j - 1
@@ -376,23 +381,19 @@ def compute_psi(k: np.ndarray):
     a[:, : n + 2] = np.diag(1 / dk_plus[:-1])
 
     b = np.zeros([n + 2, n + 4])
-    b[:, 1: n + 3] = np.diag(
+    b[:, 1 : n + 3] = np.diag(
         -(dk_plus[:-1] + dk_plus[1:]) / (dk_plus[:-1] * dk_plus[1:])
     )
 
     c = np.zeros([n + 2, n + 4])
-    c[:, 2: n + 4] = np.diag(1 / dk_plus[1:])
+    c[:, 2 : n + 4] = np.diag(1 / dk_plus[1:])
 
     psi = a + b + c
 
     return psi
 
 
-def compute_forward_op(
-    k: np.ndarray,
-    gamma: np.ndarray,
-    backward_theta: np.ndarray
-):
+def compute_forward_op(k: np.ndarray, gamma: np.ndarray, backward_theta: np.ndarray):
     """
     Compute the forward operator for the discrete local volatility model.
 
@@ -462,6 +463,7 @@ class Slice:
     forward_op_decomp : Tuple[np.ndarray, np.ndarray, np.ndarray]
         Decomposition of the forward operator.
     """
+
     num_strikes: int
     k: np.ndarray
     k_next: np.ndarray
@@ -503,7 +505,7 @@ class Slice:
         lower, upper = self.maturity_bounds
 
         beta = (tau - lower) / (upper - lower)
-        f_op = U @ D ** beta @ U_inv
+        f_op = U @ D**beta @ U_inv
 
         xi = self.psi @ self.omega
 
@@ -542,16 +544,13 @@ class Slice:
 
         p_hat = self.transition_op(tau) @ self.density
 
-        omega = (self.k_next[1:-1].reshape(1, -1) - k.reshape(-1, 1)).clip(
-            min=0)
+        omega = (self.k_next[1:-1].reshape(1, -1) - k.reshape(-1, 1)).clip(min=0)
         C_hat = omega @ p_hat
 
         return C_hat
 
 
-class DiscreteLocalVolatilityModel(
-    Estimator, PricingModel, ImpliedVolatilityModel
-):
+class DiscreteLocalVolatilityModel(Estimator, PricingModel, ImpliedVolatilityModel):
     """
     Discrete Local Volatility model for option pricing and implied volatility.
 
@@ -603,15 +602,14 @@ class DiscreteLocalVolatilityModel(
         are computed and stored in the `slices` attribute.
         """
         prices = [p.tolist() for p in option_market_data.xprices]
-        strikes = [p.tolist() for p in option_market_data.xstrikes]
+        strikes = [k.tolist() for k in option_market_data.xstrikes]
         maturities = option_market_data._ttm
         if weights is None:
-            weights = [len(p) * [1, ] for p in option_market_data.xstrikes]
+            weights = [len(p) * [1.0] for p in option_market_data.xstrikes]
 
         # Calibrate
         variables = calibrate_dlvs(
-            prices, strikes, maturities, weights,
-            bounds, local_vol_min, local_vol_max
+            prices, strikes, maturities, weights, bounds, local_vol_min, local_vol_max
         )
         self.parameters = variables
 
@@ -636,11 +634,9 @@ class DiscreteLocalVolatilityModel(
                     num_strikes=k0.shape[0] - 4,
                     k=k0,
                     k_next=k1,
-                    maturity_bounds=(
-                    self.maturities[j], self.maturities[j + 1]),
+                    maturity_bounds=(self.maturities[j], self.maturities[j + 1]),
                     density=variables["p"][j],
-                    omega=(k0[1:-1].reshape(1, -1) - k1.reshape(-1, 1)).clip(
-                        min=0),
+                    omega=(k0[1:-1].reshape(1, -1) - k1.reshape(-1, 1)).clip(min=0),
                     psi=compute_psi(k1),
                     forward_op_decomp=(U, np.diag(lam), np.linalg.inv(U)),
                 )
@@ -703,8 +699,7 @@ class DiscreteLocalVolatilityModel(
         """
         shape = k.shape
 
-        if len(k.shape) == 2 and len(tau.shape) == 1 and k.shape[0] == \
-            tau.shape[0]:
+        if len(k.shape) == 2 and len(tau.shape) == 1 and k.shape[0] == tau.shape[0]:
             k = k.flatten()
             tau = tau.repeat(shape[1])
 
@@ -718,9 +713,7 @@ class DiscreteLocalVolatilityModel(
 
         return C_hat.reshape(*shape)
 
-    def get_prices(
-        self, k: List[np.array], tau: List[float]
-    ) -> List[np.array]:
+    def get_prices(self, k: List[np.array], tau: List[float]) -> List[np.array]:
         """
         Get call prices for a given set of strike prices and maturities.
 
@@ -741,10 +734,17 @@ class DiscreteLocalVolatilityModel(
         AssertionError
             If the maturities are not monotonically increasing.
         """
-        C_hat = [len(k_slice) * [0, ] for k_slice in k]
+        C_hat = [
+            len(k_slice)
+            * [
+                0,
+            ]
+            for k_slice in k
+        ]
 
-        assert all([t1 > t0 for t0, t1 in zip(tau[:-1], tau[1:])]), \
-            "The time to maturities have to be monotonically increasing."
+        assert all(
+            [t1 > t0 for t0, t1 in zip(tau[:-1], tau[1:])]
+        ), "The time to maturities have to be monotonically increasing."
 
         T = np.unique(tau)
 
@@ -753,8 +753,7 @@ class DiscreteLocalVolatilityModel(
 
         return C_hat
 
-    def get_ivs(self, k: List[np.array], tau: List[float]
-                ) -> List[np.array]:
+    def get_ivs(self, k: List[np.array], tau: List[float]) -> List[np.array]:
         """
         Get implied volatilities for a given set of strike prices and maturities.
 
@@ -772,8 +771,7 @@ class DiscreteLocalVolatilityModel(
         """
         prices = self.get_prices(k, tau)
         ivs = [
-            bs.iv(V=V, S=1.0, tau=t, K=strikes)
-            for V, strikes, t in zip(prices, k, tau)
+            bs.iv(V=V, S=1.0, tau=t, K=strikes) for V, strikes, t in zip(prices, k, tau)
         ]
         return ivs
 
@@ -805,13 +803,7 @@ class DiscreteLocalVolatilityModel(
 
         idx = np.argsort(k)
 
-        k_aug = np.concatenate(
-            [
-                s.k_next[:2],
-                k[idx],
-                s.k_next[-2:]
-            ]
-        )
+        k_aug = np.concatenate([s.k_next[:2], k[idx], s.k_next[-2:]])
 
         omega = (s.k[1:-1].reshape(1, -1) - k_aug.reshape(-1, 1)).clip(min=0)
 
@@ -843,9 +835,7 @@ class DiscreteLocalVolatilityModel(
 
         return lv[np.argsort(idx)]
 
-    def get_dlvs(
-        self, k: List[np.ndarray], tau: List[float]
-    ) -> List[np.ndarray]:
+    def get_dlvs(self, k: List[np.ndarray], tau: List[float]) -> List[np.ndarray]:
         """
         Get discrete local volatilities for a given set of strike prices and maturities.
 
@@ -866,8 +856,6 @@ class DiscreteLocalVolatilityModel(
         T = np.unique(tau)
 
         for i in range(len(T)):
-            lv_hat.append(
-                np.sqrt(self._interpolate_dlv(k[i], T[i]))
-            )
+            lv_hat.append(np.sqrt(self._interpolate_dlv(k[i], T[i])))
 
         return lv_hat
