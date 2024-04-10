@@ -3,7 +3,6 @@
 This file include functions for computing call prices as well as implied volatilities.
 """
 
-
 import numpy as np
 from py_vollib.black_scholes_merton.implied_volatility import implied_volatility
 
@@ -117,6 +116,46 @@ def price(
     return V
 
 
+def d_plus(
+    F: fw.TensorTypeOrScalar,
+    K: fw.TensorTypeOrScalar,
+    tau: fw.TensorTypeOrScalar,
+    sigma: fw.TensorTypeOrScalar,
+):
+    a = 1.0 / (sigma * fw.sqrt(tau))
+    b = fw.log(F / K) + 0.5 * fw.pow(sigma, 2) * tau
+    return a * b
+
+
+def d_minus(
+    F: fw.TensorTypeOrScalar,
+    K: fw.TensorTypeOrScalar,
+    tau: fw.TensorTypeOrScalar,
+    sigma: fw.TensorTypeOrScalar,
+):
+    return d_plus(F, K, tau, sigma) - sigma * fw.sqrt(tau)
+
+
+def price_black(
+    F: fw.TensorTypeOrScalar,
+    K: fw.TensorTypeOrScalar,
+    tau: fw.TensorTypeOrScalar,
+    sigma: fw.TensorTypeOrScalar,
+    r: fw.TensorTypeOrScalar = 0,
+    w: fw.TensorTypeOrScalar = 1,
+):
+    D = fw.exp(-1.0 * r * tau)
+    norm_plus = fw.dist.normal.cdf(d_plus(F, K, tau, sigma))
+    norm_minus = fw.dist.normal.cdf(d_minus(F, K, tau, sigma))
+
+    C = D * (F * norm_plus - K * norm_minus)
+
+    if w == 1:
+        return C
+    else:
+        return C - D * (F - K)
+
+
 def iv(
     V: fw.TensorTypeOrScalar,
     S: fw.TensorTypeOrScalar,
@@ -163,7 +202,7 @@ def iv(
         V, S, K, tau, r, q, w = fw.to_numpy(V, S, K, tau, r, q, w)
 
         sigma: np.ndarray = jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
-        return fw.to_torch(sigma)[0]
+        return fw.to_torch(sigma)
 
     return jackel_iv(V, S, K, tau, r, q, np.where(w == 1, "c", "p"))
 

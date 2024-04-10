@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Tuple, Union, overload
+from typing import TYPE_CHECKING, List, Tuple, Union, overload
 
 import numpy as np
 from scipy.stats import norm
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     import torch
 
 TensorType = Union[np.ndarray, "torch.Tensor"]
-TensorTypeOrScalar = TensorType | float
+TensorTypeOrScalar = Union[TensorType, float]
 
 
 def assert_same_type(x: TensorTypeOrScalar, *xs: TensorTypeOrScalar):
@@ -33,6 +33,26 @@ def exp(x: TensorTypeOrScalar) -> TensorType:
     return x.exp()
 
 
+def sqrt(x: TensorTypeOrScalar) -> TensorType:
+    if isinstance(x, (int, float, np.ndarray)):
+        return np.sqrt(x)
+    return x.sqrt()
+
+
+def pow(x: TensorTypeOrScalar, d: float) -> TensorType:
+    if isinstance(x, (int, float, np.ndarray)):
+        return np.power(x, d)
+    return x.pow(d)
+
+
+def repeat(x: TensorType, repeats: int, axis: int):
+    if isinstance(x, np.ndarray):
+        return np.repeat(x, repeats=repeats, axis=axis)
+    repeat_shape = [1 for _ in range(x.shape[0])]
+    repeat_shape[axis] = repeats
+    return x.repeat(tuple(repeat_shape))
+
+
 def ones_like(x: TensorType) -> TensorType:
     if isinstance(x, np.ndarray):
         return np.ones_like(x)
@@ -40,16 +60,16 @@ def ones_like(x: TensorType) -> TensorType:
 
 
 @overload
-def concat(*xs: "torch.Tensor") -> "torch.Tensor":
+def concat(xs: List["torch.Tensor"], dim: int) -> "torch.Tensor":
     ...
 
 
 @overload
-def concat(*xs: np.ndarray) -> np.ndarray:
+def concat(xs: List[np.ndarray], dim: int) -> np.ndarray:
     ...
 
 
-def concat(*xs, dim: int = 0) -> TensorType:
+def concat(xs, dim: int = 0) -> TensorType:
     if all(isinstance(x, np.ndarray) for x in xs):
         return np.concatenate(xs, axis=dim)
     return torch.concat(xs, dim=dim)
@@ -87,20 +107,24 @@ def _to_numpy(x: TensorTypeOrScalar) -> np.ndarray:
     return x.numpy()
 
 
-def to_numpy(*xs: TensorTypeOrScalar) -> Tuple[np.ndarray, ...]:
-    return tuple(_to_numpy(x) for x in xs)
+def to_numpy(*xs: TensorTypeOrScalar) -> np.ndarray | Tuple[np.ndarray, ...]:
+    output = tuple(_to_numpy(x) for x in xs)
+    return output[0] if len(output) == 1 else output
 
 
 def _to_torch(x: TensorTypeOrScalar) -> "torch.Tensor":
-    if isinstance(x, (int, float)):
+    if isinstance(x, (int, float, list)):
         return torch.tensor(x)
     elif isinstance(x, np.ndarray):
         return torch.from_numpy(x)
     return x
 
 
-def to_torch(*xs: TensorTypeOrScalar) -> Tuple["torch.Tensor", ...]:
-    return tuple(_to_torch(x) for x in xs)
+def to_torch(
+    *xs: TensorTypeOrScalar | list,
+) -> "torch.Tensor" | Tuple["torch.Tensor", ...]:
+    output = tuple(_to_torch(x) for x in xs)
+    return output[0] if len(output) == 1 else output
 
 
 class linalg:
@@ -122,6 +146,7 @@ class dist:
             if isinstance(x, (int, float, np.ndarray)):
                 return norm.pdf(x, loc, scale)
             dist = torch.distributions.Normal(loc, scale)
+            return dist.log_prob(x).exp()
             return dist.log_prob(x).exp()
 
         @staticmethod

@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 # Mandatory
-python = "^3.11"
+python = ">=3.9,<3.13"
 
 scipy = "^1.11.4"
 py-vollib = "^1.0.1"
@@ -15,6 +15,7 @@ cvxpy = "^1.4.1"
 
 # Extras
 torch = {version = "^2.2.2", optional = true}
+pylambertw = { git = "https://github.com/mwbrulhardt/pylambertw.git", optional = true}
 
 [tool.poetry.extras]
 torch = ["torch", "pylambertw"]
@@ -42,7 +43,7 @@ pytest-randomly = "^3.12"
 pytest-xdist = { version = "^3.1", extras = ["psutil"] }
 
 [tool.poetry.group.typing.dependencies]
-pyright = "^1.1.357"
+pyright = "^1.1.358"
 
 [tool.ruff]
 extend-exclude = ["tests"]
